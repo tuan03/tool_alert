@@ -1,0 +1,31 @@
+name: bkteam-alert
+
+services:
+  alerts:
+    image: ghcr.io/tuan03/tool_alert:latest
+    init: true
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8000
+      DATA_DIR: /app/data
+      FORWARDED_ALLOW_IPS: "*"
+    ports:
+      - "127.0.0.1:8088:8000"
+    volumes:
+      - alerts-data:/app/data
+    shm_size: 256mb
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  alerts-data:

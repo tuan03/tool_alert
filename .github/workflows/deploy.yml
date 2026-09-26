@@ -1,0 +1,106 @@
+name: Build and Deploy to VPS
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry (GHCR)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Lowercase repository name for image tag
+        id: image_name
+        run: |
+          echo "IMAGE=ghcr.io/${{ github.repository_owner }}/tool_alert" | tr '[:upper:]' '[:lower:]' >> $GITHUB_ENV
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to VPS
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Lowercase image name
+        run: |
+          echo "IMAGE=ghcr.io/${{ github.repository_owner }}/tool_alert:latest" | tr '[:upper:]' '[:lower:]' >> $GITHUB_ENV
+
+      - name: Prepare directory on VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            mkdir -p /home/${{ secrets.VPS_USER }}/tool_alert
+
+      - name: Copy compose file to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "compose.prod.yaml"
+          target: "/home/${{ secrets.VPS_USER }}/tool_alert"
+          overwrite: true
+
+      - name: Pull image and restart service on VPS
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE_PULL: ${{ env.IMAGE }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          envs: GITHUB_ACTOR,GITHUB_TOKEN,IMAGE_PULL
+          script: |
+            cd /home/${{ secrets.VPS_USER }}/tool_alert
+            
+            # Đăng nhập GHCR
+            echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+            
+            # Khởi tạo .env nếu chưa có
+            if [ ! -f .env ]; then
+              echo "Khởi tạo file .env mới trên VPS..."
+              python3 -c "import secrets, base64; print(f'ADMIN_ACCESS_TOKEN={secrets.token_urlsafe(32)}\nSETTINGS_ENCRYPTION_KEY={base64.urlsafe_b64encode(secrets.token_bytes(32)).decode()}\nDATA_DIR=/app/data\nHOST=0.0.0.0\nPORT=8000')" > .env
+              chmod 600 .env
+            fi
+            
+            # Kéo image và chạy container
+            docker compose -f compose.prod.yaml pull
+            docker compose -f compose.prod.yaml up -d --remove-orphans
+            
+            # Dọn dẹp image cũ không dùng để giải phóng ổ cứng VPS
+            docker image prune -f
