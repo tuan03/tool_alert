@@ -27,19 +27,22 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Lowercase repository name for image tag
-        id: image_name
-        run: |
-          echo "IMAGE=ghcr.io/${{ github.repository_owner }}/tool_alert" | tr '[:upper:]' '[:lower:]' >> $GITHUB_ENV
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=latest
+            type=sha,format=short
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          tags: |
-            ${{ env.IMAGE }}:latest
-            ${{ env.IMAGE }}:${{ github.sha }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -50,10 +53,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Lowercase image name
-        run: |
-          echo "IMAGE=ghcr.io/${{ github.repository_owner }}/tool_alert:latest" | tr '[:upper:]' '[:lower:]' >> $GITHUB_ENV
 
       - name: Prepare directory on VPS
         uses: appleboy/ssh-action@v1.0.3
@@ -79,12 +78,11 @@ jobs:
         env:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          IMAGE_PULL: ${{ env.IMAGE }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          envs: GITHUB_ACTOR,GITHUB_TOKEN,IMAGE_PULL
+          envs: GITHUB_ACTOR,GITHUB_TOKEN
           script: |
             cd /home/${{ secrets.VPS_USER }}/tool_alert
             
