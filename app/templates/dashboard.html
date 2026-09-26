@@ -1,0 +1,34 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="csrf-token" content="{{ csrf }}"><title>BKTeam Alerts</title><link rel="stylesheet" href="/static/app.css"></head>
+<body><div class="shell"><aside class="sidebar"><a class="brand" href="/"><span class="brand-mark">B</span> BKTeam<span class="brand-sub">ALERTS</span></a>
+<p class="eyebrow nav-label">WORKSPACE</p><nav><a href="#overview" class="active">◈ Tổng quan</a><a href="#configuration">⚙ Cấu hình</a><a href="#history">◷ Lịch sử</a></nav>
+<div class="sidebar-bottom"><span class="dot"></span> Python server<div class="muted">Theo dõi độc lập với trình duyệt</div><button id="logout" class="quiet">Đăng xuất ↗</button></div></aside>
+<main class="main"><header><div><p class="eyebrow">OPERATIONS / SHOPIFY</p><h1>Theo dõi đơn hàng</h1><p class="muted">Từ BKTeam đến Telegram, tự động theo lịch của bạn.</p></div><div class="header-actions"><span id="state" class="badge">Đang tải</span><button id="scan-now" class="primary">↻ Quét ngay</button></div></header>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<section id="overview" class="stats"><article class="stat"><p>ĐƠN ĐÃ GHI NHẬN</p><strong id="order-count">—</strong><small>Baseline và các đơn phát hiện sau đó</small></article>
+<article class="stat"><p>LẦN QUÉT TIẾP THEO</p><strong id="countdown">—</strong><small id="interval-label">Chu kỳ mặc định 2 phút</small></article>
+<article class="stat"><p>THÔNG BÁO ĐÃ GỬI</p><strong id="sent-count">—</strong><small id="queue-label">—</small></article>
+<article class="stat"><p>THÀNH CÔNG GẦN NHẤT</p><strong id="last-success" class="small-stat">Chưa quét</strong><small>Giờ Việt Nam · UTC+7</small></article></section>
+<section class="panel status-panel"><div><span class="dot"></span><b id="status-title">Chuẩn bị kết nối</b><p id="status-description" class="muted">Nhập tài khoản nguồn và Telegram để bắt đầu.</p></div><button id="toggle" class="secondary">Bật tự động</button></section>
+<section id="configuration"><div class="section-heading"><div><p class="eyebrow">CONNECTIONS & SCHEDULE</p><h2>Cấu hình hệ thống</h2></div><span class="muted">Lưu bền vững trên server</span></div>
+<form id="settings-form"><div class="config-grid"><article class="panel"><div class="panel-heading"><span class="icon">01</span><div><h3>Nguồn BKTeam</h3><p class="muted">Đọc trang quản lý đơn Shopify</p></div></div>
+<label for="username">Tài khoản</label><input id="username" name="username" autocomplete="username" placeholder="Tài khoản BKTeam">
+<label for="password">Mật khẩu</label><input id="password" name="password" type="password" autocomplete="new-password" placeholder="Nhập mật khẩu">
+<p id="password-hint" class="hint">Bí mật được mã hóa khi lưu.</p><label class="check subtle"><input id="clear-password" type="checkbox"> Xóa mật khẩu đã lưu</label>
+<button type="button" id="test-source" class="secondary">Kiểm tra đăng nhập ↗</button></article>
+<article class="panel"><div class="panel-heading"><span class="icon">02</span><div><h3>Telegram</h3><p class="muted">Bot gửi thông báo đơn hàng mới</p></div></div>
+<label for="bot_token">Bot token</label><input id="bot_token" name="bot_token" type="password" autocomplete="new-password" placeholder="123456:ABC...">
+<p id="bot-hint" class="hint">Nhập token bot của bạn.</p><label class="check subtle"><input id="clear-bot" type="checkbox"> Xóa bot token đã lưu</label>
+<div class="two-cols"><div><label for="chat_id">Chat ID</label><input id="chat_id" name="chat_id" placeholder="-100… hoặc ID cá nhân"></div><div><label for="topic_id">Topic ID <span class="muted">(tùy chọn)</span></label><input id="topic_id" name="topic_id" type="number" min="1" placeholder="Để trống nếu không dùng"></div></div>
+<button type="button" id="test-telegram" class="secondary">Gửi tin thử ↗</button></article>
+<article class="panel schedule-panel"><div class="panel-heading"><span class="icon">03</span><div><h3>Lịch quét & phạm vi</h3><p class="muted">Điều chỉnh cách theo dõi đơn</p></div></div>
+<div class="two-cols"><div><label for="interval_seconds">Chu kỳ quét</label><div class="input-unit"><input id="interval_seconds" name="interval_seconds" type="number" min="30" max="86400" required value="120"><span>giây</span></div><p class="hint">120 giây = 2 phút · tối thiểu 30 giây</p></div><div><label for="lookback_days">Số ngày lịch sử</label><input id="lookback_days" type="number" min="1" max="36500" value="30"><label class="check"><input type="checkbox" id="all-history"> Toàn bộ lịch sử</label></div></div>
+<label for="stores">Store theo dõi</label><input id="stores" placeholder="Để trống = tất cả · ví dụ SPFY3, SPFY6"><p class="hint">Nhập mã store, cách nhau bằng dấu phẩy.</p>
+<label class="check"><input id="enabled" type="checkbox"> Bật quét tự động</label>
+<div class="notice">Lần đầu chỉ ghi nhận đơn hiện có. Mở rộng phạm vi sẽ ghi nhận phần lịch sử mới thêm mà không báo hàng loạt. Đơn nhập lùi ngày ngoài phạm vi sẽ không được phát hiện.</div></article>
+<article class="panel preview-panel"><p class="eyebrow">MESSAGE PREVIEW</p><h3>Một đơn mới. Một thông báo.</h3><div class="telegram-preview"><div class="telegram-name">BKTeam Alerts <span>bot</span></div><p>🛍 Đơn hàng mới<br>Store: CHILLGEN (SPFY3)<br>Đơn: SPFY3-1019<br>Giá trị đơn: 27.81</p><small>Ví dụ minh họa</small></div><p class="muted">Giá trị lấy từ Grand Total. Đơn nhiều sản phẩm được gộp, không cộng lặp tiền. Không tự suy đoán đơn vị tiền tệ.</p></article></div>
+<div class="save-bar"><p class="muted">Thay đổi áp dụng ở lượt tiếp theo. Tạm dừng quét vẫn tiếp tục gửi các tin đã xếp hàng.</p><button type="submit" class="primary">Lưu cấu hình</button></div></form></section>
+<section id="history"><div class="section-heading"><div><p class="eyebrow">ACTIVITY LOG</p><h2>Lịch sử hoạt động</h2></div><div class="tabs" role="tablist"><button type="button" class="active" data-tab="notifications">Thông báo</button><button type="button" data-tab="scans">Lượt quét</button><button type="button" data-tab="orders">Đơn hàng</button></div></div>
+<div class="panel table-panel"><div class="table-scroll"><table><thead id="history-head"></thead><tbody id="history-body"></tbody></table></div><p class="table-footer">100 bản ghi gần nhất · Dữ liệu tự cập nhật mỗi 5 giây</p></div></section>
+<footer><div>BKTeam Alerts · <button id="logout-footer" class="quiet" type="button">Đăng xuất</button></div><span>Chỉ đọc dữ liệu nguồn · Bí mật lưu mã hóa · Asia/Saigon</span></footer></main></div>
+<script src="/static/app.js" defer></script></body></html>

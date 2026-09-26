@@ -1,0 +1,59 @@
+name: bkteam-alert
+services:
+  alerts:
+    build: .
+    init: true
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8000
+      DATA_DIR: /app/data
+      FORWARDED_ALLOW_IPS: 172.30.87.2
+    volumes:
+      - alerts-data:/app/data
+    shm_size: 256mb
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN in .env to your hostname}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      app-network:
+        ipv4_address: 172.30.87.2
+    depends_on:
+      alerts:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+networks:
+  app-network:
+    ipam:
+      config:
+        - subnet: 172.30.87.0/24
+volumes:
+  alerts-data:
+  caddy-data:
+  caddy-config:
