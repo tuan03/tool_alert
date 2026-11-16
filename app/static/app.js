@@ -1,7 +1,7 @@
 const $ = id => document.getElementById(id);
 const csrf = document.querySelector('meta[name="csrf-token"]').content;
 let config = null, status = null, history = null, activeTab = 'notifications';
-let refreshBusy = false;
+let refreshBusy = false, lastRefreshAt = 0;
 const timeText = t => t ? new Date(t * 1000).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',hour12:false}) : 'Chưa có';
 const stateNames = {pending:'Chờ gửi',sending:'Đang gửi',sent:'Đã gửi',retrying:'Đang thử lại',failed:'Lỗi',uncertain:'Cần kiểm tra',success:'Thành công',running:'Đang quét'};
 function toast(text, error=false) { const t=$('toast');t.textContent=text;t.className='toast'+(error?' error':'');t.hidden=false; }
@@ -84,7 +84,7 @@ function renderHistory(){
 }
 async function refresh(){
   if(refreshBusy)return;refreshBusy=true;
-  try{[status,history]=await Promise.all([api('/api/status'),api('/api/history')]);renderStatus();renderHistory();}
+  try{[status,history]=await Promise.all([api('/api/status'),api('/api/history')]);lastRefreshAt=Date.now();renderStatus();renderHistory();}
   catch(e){toast(e.message,true);}finally{refreshBusy=false;}
 }
 async function perform(button,action){button.disabled=true;try{await action();}catch(e){toast(e.message,true);}finally{button.disabled=false;}}
@@ -100,4 +100,6 @@ $('logout').onclick=e=>perform(e.currentTarget,async()=>{await api('/auth/logout
 $('logout-footer').onclick=$('logout').onclick;
 document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{activeTab=b.dataset.tab;document.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('active',x===b));renderHistory();});
 api('/api/settings').then(fillForm).then(refresh).catch(e=>toast(e.message,true));
-setInterval(refresh,5000);setInterval(renderCountdown,1000);
+setInterval(()=>{if(!document.hidden)refresh();},5000);
+setInterval(()=>{if(!document.hidden)renderCountdown();},1000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){renderCountdown();if(Date.now()-lastRefreshAt>=2000)refresh();}});

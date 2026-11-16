@@ -10,9 +10,11 @@ class Scheduler:
         self.current = None
         self.busy = False
         self.last_error = None
+        self._wake = asyncio.Event()
 
     def settings_changed(self):
         self.next_due = self.clock() + self.repo.settings().interval_seconds
+        self._wake.set()
 
     def trigger(self):
         if self.busy:
@@ -43,6 +45,7 @@ class Scheduler:
             scheduled = started + interval
             self.next_due = scheduled if scheduled > self.clock() else self.clock()+interval
             self.busy = False
+            self._wake.set()
 
     async def tick(self):
         settings = self.repo.settings()
@@ -51,8 +54,17 @@ class Scheduler:
 
     async def loop(self):
         while True:
+            self._wake.clear()
             await self.tick()
-            await asyncio.sleep(1)
+            settings = self.repo.settings()
+            if self.busy or not (settings.enabled and settings.username and settings.password):
+                await self._wake.wait()
+            else:
+                delay = max(0.0, self.next_due - self.clock())
+                try:
+                    await asyncio.wait_for(self._wake.wait(), timeout=delay)
+                except TimeoutError:
+                    pass
 
     async def stop(self):
         if self.current and not self.current.done():

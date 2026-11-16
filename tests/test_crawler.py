@@ -51,17 +51,33 @@ async def test_repeated_content_on_different_page_fails():
                    37:html([("1","1","S","10")])})
     with pytest.raises(SourceError): await c.scan(Settings())
 
-async def test_login_uses_visible_result_when_ajax_body_disappears():
-    from playwright.async_api import async_playwright
-    async with async_playwright() as p:
-        browser = await p.chromium.launch()
-        try:
-            page = await browser.new_page()
-            page.set_default_timeout(3000)
-            await page.set_content("""<input id="Username"><input id="Password"><input type="submit" onclick="document.body.innerHTML='<form id=shopify-order-search-form></form><table><tr id=header_order_shopify></tr></table>'">""")
-            c = Crawler()
-            c.page = page
-            await c._login(Settings(username="u",password="p"))
-            assert await page.locator("#header_order_shopify").count() == 1
-        finally:
-            await browser.close()
+async def test_http_login_session_reuse_and_failed_credentials():
+    import httpx
+    calls = []
+    authenticated = {"ok": False}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append((request.method, str(request.url)))
+        if request.url.path.endswith("/ajax.php") and request.url.query == b"page=login":
+            body = request.content.decode()
+            if "password=good" in body:
+                authenticated["ok"] = True
+                return httpx.Response(200, json={"status": "success", "redirect": "admin.php"})
+            return httpx.Response(200, json={"status": "error", "message": "Sai mật khẩu"})
+        if not authenticated["ok"]:
+            return httpx.Response(200, text='<input id="Username"><input id="Password">')
+        return httpx.Response(200, text=html([("1", "1", "S", "10")]))
+
+    c = Crawler(transport=httpx.MockTransport(handler))
+    try:
+        with pytest.raises(SourceError):
+            await c.test_login(Settings(username="u", password="bad"))
+        assert await c.test_login(Settings(username="u", password="good"))
+        login_calls_after_first = sum(1 for m, _ in calls if m == "POST")
+        assert login_calls_after_first == 2
+        snap = await c.scan(Settings(username="u", password="good"))
+        assert len(snap.orders) == 1
+        # Second scan reuses authenticated session without logging in again.
+        assert sum(1 for m, _ in calls if m == "POST") == 2
+    finally:
+        await c.close()

@@ -34,6 +34,9 @@ def create_app(config: Bootstrap | None = None, background=True):
     async def lifespan(app):
         lock = None
         tasks = []
+        loop = asyncio.get_running_loop()
+        outbox_wake = asyncio.Event()
+        repo.on_outbox_change = lambda: loop.call_soon_threadsafe(outbox_wake.set)
         if background:
             lock = portalocker.Lock(str(config.data_dir/"server.lock"),timeout=0)
             try:
@@ -45,24 +48,34 @@ def create_app(config: Bootstrap | None = None, background=True):
             app.state.telegram = TelegramClient(http)
             async def sender_loop():
                 while True:
+                    outbox_wake.clear()
                     try:
-                        if repo.settings().bot_token:
-                            await send_one(repo,app.state.telegram)
+                        while repo.settings().bot_token and await send_one(repo,app.state.telegram):
+                            pass
                     except Exception:
                         # A claimed event is ambiguous if an unexpected failure interrupts delivery.
                         with repo.connect() as db:
                             db.execute("UPDATE outbox SET status='uncertain',error='Gửi bị gián đoạn; kiểm tra Telegram trước khi thử lại.' WHERE status='sending'")
-                    await asyncio.sleep(1)
+                    delay = repo.next_outbox_delay()
+                    if delay is None:
+                        await outbox_wake.wait()
+                    elif delay > 0:
+                        try:
+                            await asyncio.wait_for(outbox_wake.wait(), timeout=delay)
+                        except TimeoutError:
+                            pass
             if background:
                 tasks = [asyncio.create_task(scheduler.loop()),asyncio.create_task(sender_loop())]
             try:
                 yield
             finally:
+                repo.on_outbox_change = None
                 for t in tasks:
                     t.cancel()
                 await asyncio.gather(*tasks,return_exceptions=True)
                 await scheduler.stop()
                 await crawler.close()
+                repo.close()
                 if lock:
                     lock.release()
 

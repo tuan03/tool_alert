@@ -106,3 +106,16 @@ def test_expanding_dates_does_not_silence_new_orders_in_old_window(tmp_path):
     result=r.commit_snapshot(ScanSnapshot([recent,old]),Settings(username="u",lookback_days=None))
     assert result["new_orders"] == 1
     assert r.history()["notifications"][0]["payload"]["shopify_order_id"] == "1"
+
+def test_scans_pruned_to_limit_while_preserving_last_success(tmp_path):
+    from app.db import MAX_RETAINED_SCANS
+    r = repo(tmp_path)
+    first_ok = r.start_scan()
+    r.finish_scan(first_ok, "success", pages=1, orders=5, new_orders=0)
+    for _ in range(MAX_RETAINED_SCANS + 20):
+        sid = r.start_scan()
+        r.finish_scan(sid, "failed", error="err")
+    with r.connect() as db:
+        total = db.execute("SELECT COUNT(*) FROM scans").fetchone()[0]
+    assert total == MAX_RETAINED_SCANS + 1
+    assert r.summary()["last_success"] is not None

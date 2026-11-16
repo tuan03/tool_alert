@@ -1,3 +1,4 @@
+import hashlib
 import re
 from decimal import Decimal
 from datetime import datetime
@@ -7,6 +8,17 @@ from app.models import OrderObservation
 
 class SourceError(RuntimeError):
     pass
+
+
+def ensure_soup(html: str | BeautifulSoup) -> BeautifulSoup:
+    return html if isinstance(html, BeautifulSoup) else BeautifulSoup(html, "html.parser")
+
+
+def table_signature(html: str | BeautifulSoup) -> str:
+    soup = ensure_soup(html)
+    header = soup.select_one("#header_order_shopify")
+    table = header.find_parent("table") if header else None
+    return hashlib.sha256(str(table).encode()).hexdigest()
 
 
 def merge_orders(orders):
@@ -23,8 +35,8 @@ def merge_orders(orders):
     return list(unique.values())
 
 
-def parse_orders(html: str) -> list[OrderObservation]:
-    soup = BeautifulSoup(html, "html.parser")
+def parse_orders(html: str | BeautifulSoup) -> list[OrderObservation]:
+    soup = ensure_soup(html)
     header = soup.select_one("#header_order_shopify")
     if not soup.select_one("#shopify-order-search-form") or not header:
         raise SourceError("Không tìm thấy bảng đơn; phiên hết hạn hoặc cấu trúc trang đã đổi.")
@@ -66,8 +78,8 @@ def parse_orders(html: str) -> list[OrderObservation]:
     return merge_orders(orders)
 
 
-def pagination_offsets(html: str) -> set[int]:
-    soup = BeautifulSoup(html, "html.parser")
+def pagination_offsets(html: str | BeautifulSoup) -> set[int]:
+    soup = ensure_soup(html)
     nav = soup.select_one("#pagenav_bar")
     if nav is None:
         raise SourceError("Không tìm thấy điều hướng trang.")

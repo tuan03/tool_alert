@@ -12,11 +12,13 @@ services:
       - "127.0.0.1:8000:8000"
     volumes:
       - alerts-data:/app/data
-    shm_size: 256mb
+    tmpfs:
+      - /tmp:size=32m
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"]
-      interval: 30s
+      interval: 60s
       timeout: 10s
       retries: 3
+      start_period: 10s
 volumes:
   alerts-data:

@@ -2,7 +2,7 @@
 name = "bkteam-alert"
 version = "0.1.0"
 requires-python = ">=3.12"
-dependencies = ["fastapi>=0.115,<1", "uvicorn>=0.30,<1", "jinja2>=3.1,<4", "httpx>=0.28,<1", "cryptography>=44", "beautifulsoup4>=4.13,<5", "playwright>=1.50,<2", "python-dotenv>=1,<2", "portalocker>=3,<5", "tzdata>=2025"]
+dependencies = ["fastapi>=0.115,<1", "uvicorn>=0.30,<1", "jinja2>=3.1,<4", "httpx>=0.28,<1", "cryptography>=44", "beautifulsoup4>=4.13,<5", "python-dotenv>=1,<2", "portalocker>=3,<5", "tzdata>=2025"]
 [project.optional-dependencies]
 test = ["pytest>=8", "pytest-asyncio>=0.25", "httpx2>=2.13"]
 [tool.pytest.ini_options]
